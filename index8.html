@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Custom Stroke Numeral Generator (Base 10 / Base 12)</title>
+  <style>
+    :root {
+      --bg: #111827;
+      --fg: #e5e7eb;
+      --card-bg: #020617;
+      --card-border: #1f2937;
+      --input-bg: #020617;
+      --input-border: #374151;
+      --muted: #9ca3af;
+      --hint: #6b7280;
+      --digit-bg: radial-gradient(circle at top, #1f2937 0, #020617 60%);
+      --preview-card-bg: #020617;
+      --preview-border: #111827;
+      --secondary-btn-bg: #020617;
+      --secondary-btn-border: #374151;
+    }
+
+    body[data-theme="light"] {
+      --bg: #f3f4f6;
+      --fg: #111827;
+      --card-bg: #ffffff;
+      --card-border: #d1d5db;
+      --input-bg: #ffffff;
+      --input-border: #9ca3af;
+      --muted: #4b5563;
+      --hint: #6b7280;
+      --digit-bg: radial-gradient(circle at top, #e5e7eb 0, #ffffff 60%);
+      --preview-card-bg: #ffffff;
+      --preview-border: #d1d5db;
+      --secondary-btn-bg: #ffffff;
+      --secondary-btn-border: #9ca3af;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.6rem;
+      color: var(--fg);
+    }
+    .card {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 20px 24px 24px;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.6);
+      border: 1px solid var(--card-border);
+      overflow: hidden;
+    }
+    .top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 12px;
+    }
+    .theme-toggle {
+      font-size: 0.85rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Toggle switch styling */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: #6b7280;
+      transition: .2s;
+      border-radius: 999px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      top: 3px;
+      background-color: white;
+      transition: .2s;
+      border-radius: 999px;
+    }
+    .switch input:checked + .slider {
+      background-color: #22c55e;
+    }
+    .switch input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+      margin-bottom: 16px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    label {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    input[type="number"],
+    select {
+      background: var(--input-bg);
+      border-radius: 8px;
+      border: 1px solid var(--input-border);
+      color: var(--fg);
+      padding: 6px 10px;
+      font-size: 0.95rem;
+      min-width: 130px;
+    }
+    input[type="number"]:focus,
+    select:focus {
+      outline: none;
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 1px #38bdf8;
+    }
+    button {
+      border-radius: 999px;
+      border: none;
+      padding: 8px 18px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      background: linear-gradient(135deg, #22c55e, #38bdf8);
+      color: #020617;
+      font-weight: 600;
+      box-shadow: 0 10px 25px rgba(34,197,94,0.4);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    button:hover {
+      filter: brightness(1.05);
+      transform: translateY(-1px);
+    }
+    button:active {
+      transform: translateY(0);
+      box-shadow: 0 6px 15px rgba(34,197,94,0.4);
+    }
+    .secondary-btn {
+      background: var(--secondary-btn-bg);
+      color: var(--fg);
+      box-shadow: none;
+      border: 1px solid var(--secondary-btn-border);
+    }
+    .secondary-btn:hover {
+      filter: brightness(1.05);
+    }
+    .checkbox-row {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+    }
+    .checkbox-row label {
+      margin: 0;
+    }
+    .output-meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .display-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .glyph-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+      flex: 1 1 300px;
+    }
+    .digit-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 4px;
+      border-radius: 10px;
+      background: var(--digit-bg);
+      border: 1px solid var(--preview-border);
+    }
+    .digit-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    svg {
+      display: block;
+    }
+
+    .preview-row {
+      display: flex;
+      flex-direction: row;
+      gap: 10px;
+      flex: 1 1 260px;
+      min-width: 0;
+    }
+    .preview-card {
+      background: var(--preview-card-bg);
+      border-radius: 10px;
+      border: 1px solid var(--preview-border);
+      padding: 8px 10px 10px;
+      text-align: center;
+      flex: 1 1 0;
+    }
+    .preview-title {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .preview-glyph svg {
+      margin: 0 auto;
+    }
+    .preview-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .error {
+      color: #f97373;
+      font-size: 0.85rem;
+      margin-top: 6px;
+    }
+    .hint {
+      font-size: 0.8rem;
+      color: var(--hint);
+      margin-top: 10px;
+      line-height: 1.4;
+    }
+    .export-row {
+      margin-top: 16px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="top-row">
+      <h1>Stroke Numeral Generator (Base 10 / Base 12)</h1>
+      <div class="theme-toggle">
+        <span id="themeLabel">Dark mode</span>
+        <label class="switch">
+          <input type="checkbox" id="themeToggle" />
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="field">
+        <label for="numberInput">Decimal number (base 10 input)</label>
+        <input id="numberInput" type="number" value="2025" min="0" />
+      </div>
+
+      <div class="field">
+        <label for="baseSelect">Represent in base</label>
+        <select id="baseSelect">
+          <option value="10">Base 10 (digits 0–9)</option>
+          <option value="12">Base 12 (digits 0–11)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <button id="renderBtn" type="button">
+          Render glyphs
+          <span aria-hidden="true">➜</span>
+        </button>
+      </div>
+
+      <div class="field">
+        <div class="checkbox-row">
+          <input id="stretchCheckbox" type="checkbox" />
+          <label for="stretchCheckbox">Stretch 1–5 (full height)</label>
+        </div>
+        <div class="checkbox-row">
+          <input id="chopCheckbox" type="checkbox" />
+          <label for="chopCheckbox">Chop (square digits, base 10 only)</label>
+        </div>
+      </div>
+    </div>
+
+    <div id="error" class="error" style="display:none;"></div>
+
+    <div class="output-meta" id="digitInfo"></div>
+
+    <div class="display-row">
+      <div class="glyph-row" id="glyphRow"></div>
+
+      <div class="preview-row">
+        <div class="preview-card">
+          <div class="preview-title">Normal loop (0–9)</div>
+          <div id="previewNormal" class="preview-glyph"></div>
+        </div>
+        <div class="preview-card">
+          <div class="preview-title">Chopped loop (0–9)</div>
+          <div id="previewChop" class="preview-glyph"></div>
+        </div>
+        <div class="preview-card">
+          <div class="preview-title">Stretched loop (0–9)</div>
+          <div id="previewStretch" class="preview-glyph"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="export-row">
+      <button id="exportSvgBtn" type="button" class="secondary-btn">Download SVG</button>
+      <button id="exportPngBtn" type="button" class="secondary-btn">Download PNG</button>
+    </div>
+
+    <div class="hint">
+      Input is always interpreted as a decimal (base-10) number.  
+      The base selector controls how that number is <em>represented</em> using your stroke digits.  
+      In base 12, digits 10 and 11 are shown as <strong>A</strong> and <strong>B</strong>.  
+      Chop mode makes 0–9 square-style forms and only works in base 10.
+    </div>
+  </div>
+
+  <script>
+    // --- THEME SETUP ---
+    (function initTheme() {
+      const toggle = document.getElementById("themeToggle");
+      const prefersDark =
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.body.dataset.theme = prefersDark ? "dark" : "light";
+      toggle.checked = prefersDark;
+      updateThemeLabel();
+
+      toggle.addEventListener("change", () => {
+        document.body.dataset.theme = toggle.checked ? "dark" : "light";
+        updateThemeLabel();
+        // Re-render immediately so glyph colors update
+        render();
+        updatePreviews();
+      });
+    })();
+
+    function isDarkTheme() {
+      return document.body.dataset.theme !== "light";
+    }
+
+    function updateThemeLabel() {
+      const label = document.getElementById("themeLabel");
+      const isDark = isDarkTheme();
+      label.textContent = isDark ? "Dark mode" : "Light mode";
+    }
+
+    // Anchor coordinates for the full-height grid:
+    const POINTS = {
+      UL: { x: 20, y: 10 },
+      UR: { x: 80, y: 10 },
+      ML: { x: 20, y: 75 },
+      MR: { x: 80, y: 75 },
+      LL: { x: 20, y: 140 },
+      LR: { x: 80, y: 140 }
+    };
+
+    // Stroke sequence (cumulative) for digits 1–11:
+    const STEP_SEGMENTS = [
+      ["UR", "ML"],  // 1
+      ["ML", "UL"],  // 2
+      ["UL", "UR"],  // 3
+      ["UR", "MR"],  // 4
+      ["MR", "ML"],  // 5
+      ["ML", "LL"],  // 6
+      ["LL", "LR"],  // 7
+      ["LR", "MR"],  // 8
+      ["MR", "LL"],  // 9
+      ["UL", "MR"],  // 10
+      ["ML", "LR"]   // 11
+    ];
+
+    // 0 (normal) = outside-only loop
+    const ZERO_SEGMENTS = [
+      ["UL", "UR"],
+      ["UR", "MR"],
+      ["MR", "LR"],
+      ["LR", "LL"],
+      ["LL", "ML"],
+      ["ML", "UL"]
+    ];
+
+    function segmentsForDigit(d) {
+      if (d === 0) {
+        return ZERO_SEGMENTS.slice();
+      }
+      if (d < 0 || d > 11) {
+        return [];
+      }
+      const segs = [];
+      for (let i = 0; i < d && i < STEP_SEGMENTS.length; i++) {
+        const key = STEP_SEGMENTS[i][0] + "-" + STEP_SEGMENTS[i][1];
+        if (!segs.includes(key)) {
+          segs.push(key);
+        }
+      }
+      return segs.map(k => k.split("-"));
+    }
+
+    function digitLabel(d, base) {
+      if (base === 12 && d >= 10) {
+        return d === 10 ? "A" : "B";
+      }
+      return String(d);
+    }
+
+    // --- CHOP MODE HELPERS ---
+
+    // Frame coordinates for chop mode (square inside 100x100 viewBox)
+    const CHOP_UL = { x: 15, y: 15 };
+    const CHOP_UR = { x: 85, y: 15 };
+    const CHOP_LL = { x: 15, y: 85 };
+    const CHOP_LR = { x: 85, y: 85 };
+
+    const CHOP_TOP_POINTS = {
+      UL: CHOP_UL,
+      UR: CHOP_UR,
+      ML: CHOP_LL,
+      MR: CHOP_LR
+    };
+
+    const CHOP_BOTTOM_POINTS = {
+      ML: CHOP_UL,
+      MR: CHOP_UR,
+      LL: CHOP_LL,
+      LR: CHOP_LR
+    };
+
+    const CHOP_ZERO_POINTS = {
+      UL: CHOP_UL,
+      UR: CHOP_UR,
+      LL: CHOP_LL,
+      LR: CHOP_LR
+    };
+
+    function segmentsForDigitChop(d) {
+      if (d === 0) {
+        return [
+          ["UL", "UR"],
+          ["UR", "LR"],
+          ["LR", "LL"],
+          ["LL", "UL"]
+        ];
+      }
+      if (d >= 1 && d <= 5) {
+        const segs = [];
+        for (let i = 0; i < d && i < 5; i++) {
+          const [a, b] = STEP_SEGMENTS[i];
+          segs.push([a, b]);
+        }
+        return segs;
+      }
+      if (d >= 6 && d <= 9) {
+        const segs = [];
+        for (let i = 5; i < d && i <= 8; i++) {
+          const [a, b] = STEP_SEGMENTS[i];
+          segs.push([a, b]);
+        }
+        return segs;
+      }
+      return [];
+    }
+
+    function makeChopSVG(digit, opts) {
+      opts = opts || {};
+      const mainOutput = !!opts.mainOutput;
+      const dark = isDarkTheme();
+
+      let strokeColor;
+      let frameColor;
+
+      if (mainOutput) {
+        // Main output: white in dark, black in light
+        strokeColor = dark ? "#f9fafb" : "#000000";
+      } else {
+        // Previews/exports: light gray in dark, dark gray in light
+        strokeColor = dark ? "#e5e7eb" : "#374151";
+      }
+
+      frameColor = dark ? "#1f2937" : "#9ca3af";
+      const showFrame = !mainOutput;
+
+      let pts;
+      let segs = segmentsForDigitChop(digit);
+
+      if (digit === 0) {
+        pts = CHOP_ZERO_POINTS;
+      } else if (digit >= 1 && digit <= 5) {
+        pts = CHOP_TOP_POINTS;
+      } else if (digit >= 6 && digit <= 9) {
+        pts = CHOP_BOTTOM_POINTS;
+      } else {
+        pts = CHOP_TOP_POINTS;
+        segs = [];
+      }
+
+      let svg = `<svg width="90" height="90" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">`;
+
+      if (showFrame) {
+        svg += `
+          <rect x="15" y="15" width="70" height="70"
+                fill="none"
+                stroke="${frameColor}"
+                stroke-width="2"
+                stroke-linejoin="round" />`;
+      }
+
+      for (const [a, b] of segs) {
+        const p1 = pts[a];
+        const p2 = pts[b];
+        if (!p1 || !p2) continue;
+        svg += `
+          <line x1="${p1.x}" y1="${p1.y}"
+                x2="${p2.x}" y2="${p2.y}"
+                stroke="${strokeColor}"
+                stroke-width="5"
+                stroke-linecap="round" />`;
+      }
+
+      svg += `</svg>`;
+      return svg;
+    }
+
+    // --- NORMAL (FULL-HEIGHT) SVG ---
+
+    function makeFullHeightSVG(digit, opts) {
+      opts = opts || {};
+      const stretch = !!opts.stretch;
+      const mainOutput = !!opts.mainOutput;
+      const dark = isDarkTheme();
+
+      const segs = segmentsForDigit(digit);
+
+      let strokeColor;
+      let frameColor;
+
+      if (mainOutput) {
+        strokeColor = dark ? "#f9fafb" : "#000000";
+      } else {
+        strokeColor = dark ? "#e5e7eb" : "#374151";
+      }
+
+      frameColor = dark ? "#1f2937" : "#9ca3af";
+      const showFrame = !mainOutput;
+
+      const pts = JSON.parse(JSON.stringify(POINTS));
+
+      // Stretch 1–5 so their "middle" becomes the bottom row
+      if (stretch && digit >= 1 && digit <= 5) {
+        const shift = POINTS.LL.y - POINTS.ML.y;
+        pts.ML.y += shift;
+        pts.MR.y += shift;
+        pts.LL.y += shift;
+        pts.LR.y += shift;
+      }
+
+      let svg = `<svg width="90" height="150" viewBox="0 0 100 150" xmlns="http://www.w3.org/2000/svg">`;
+
+      if (showFrame) {
+        svg += `
+          <rect x="15" y="5" width="70" height="140"
+                fill="none"
+                stroke="${frameColor}"
+                stroke-width="2"
+                stroke-linejoin="round" />`;
+      }
+
+      for (const [a, b] of segs) {
+        const p1 = pts[a];
+        const p2 = pts[b];
+        if (!p1 || !p2) continue;
+        svg += `
+          <line x1="${p1.x}" y1="${p1.y}"
+                x2="${p2.x}" y2="${p2.y}"
+                stroke="${strokeColor}"
+                stroke-width="5"
+                stroke-linecap="round" />`;
+      }
+
+      svg += `</svg>`;
+      return svg;
+    }
+
+    function makeDigitSVG(digit, base, opts) {
+      opts = opts || {};
+      const chopActive = opts.chop && base === 10 && digit <= 9;
+      if (chopActive) {
+        return makeChopSVG(digit, opts);
+      } else {
+        return makeFullHeightSVG(digit, opts);
+      }
+    }
+
+    // --- BASE CONVERSION ---
+
+    function toBaseDigits(n, base) {
+      if (n === 0) return [0];
+      const digits = [];
+      while (n > 0) {
+        digits.push(n % base);
+        n = Math.floor(n / base);
+      }
+      return digits.reverse();
+    }
+
+    // --- RENDER MAIN OUTPUT ---
+
+    let lastDigits = [0];
+    let lastBase = 10;
+    let lastStretch = false;
+    let lastChop = false;
+
+    function render() {
+      const numInput = document.getElementById("numberInput");
+      const baseSelect = document.getElementById("baseSelect");
+      const errorEl = document.getElementById("error");
+      const glyphRow = document.getElementById("glyphRow");
+      const digitInfo = document.getElementById("digitInfo");
+      const chopBox = document.getElementById("chopCheckbox");
+      const stretchBox = document.getElementById("stretchCheckbox");
+
+      const base = parseInt(baseSelect.value, 10);
+      const raw = numInput.value.trim();
+      let n = Number(raw);
+
+      errorEl.style.display = "none";
+      errorEl.textContent = "";
+      glyphRow.innerHTML = "";
+      digitInfo.textContent = "";
+
+      // Chop only valid in base 10
+      if (base !== 10) {
+        chopBox.checked = false;
+        chopBox.disabled = true;
+      } else {
+        chopBox.disabled = false;
+      }
+
+      if (!Number.isFinite(n) || !Number.isInteger(n)) {
+        errorEl.textContent = "Please enter a valid integer.";
+        errorEl.style.display = "block";
+        return;
+      }
+      if (n < 0) {
+        errorEl.textContent = "Negative numbers are not supported (yet).";
+        errorEl.style.display = "block";
+        return;
+      }
+
+      if (n > 9999999) {
+        errorEl.textContent = "That’s a bit large – try something smaller for readability.";
+        errorEl.style.display = "block";
+      }
+
+      const digits = toBaseDigits(n, base);
+
+      if (digits.some(d => d > 11)) {
+        errorEl.textContent = "Digit outside 0–11 encountered – base too large for current glyph set.";
+        errorEl.style.display = "block";
+        return;
+      }
+
+      const stretch = !!stretchBox.checked;
+      const chopActive = !!(chopBox.checked && base === 10);
+
+      const labelDigits = digits.map(d => digitLabel(d, base)).join(" ");
+      digitInfo.textContent =
+        `Decimal ${n} in base ${base} → digits: [ ${labelDigits} ]`;
+
+      const frag = document.createDocumentFragment();
+      digits.forEach(d => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "digit-wrapper";
+        wrapper.innerHTML = makeDigitSVG(d, base, {
+          stretch,
+          chop: chopActive,
+          mainOutput: true
+        });
+        const label = document.createElement("div");
+        label.className = "digit-label";
+        label.textContent = digitLabel(d, base);
+        wrapper.appendChild(label);
+        frag.appendChild(wrapper);
+      });
+
+      glyphRow.appendChild(frag);
+
+      // Remember last settings for export
+      lastDigits = digits;
+      lastBase = base;
+      lastStretch = stretch;
+      lastChop = chopActive;
+    }
+
+    // --- PREVIEW ANIMATIONS ---
+
+    let previewIndex = 0;
+
+    function updatePreviews() {
+      const normalEl = document.getElementById("previewNormal");
+      const chopEl = document.getElementById("previewChop");
+      const stretchEl = document.getElementById("previewStretch");
+      if (!normalEl || !chopEl || !stretchEl) return;
+
+      const d = previewIndex;
+
+      normalEl.innerHTML =
+        makeDigitSVG(d, 10, { stretch: false, chop: false }) +
+        `<div class="preview-label">${d}</div>`;
+
+      chopEl.innerHTML =
+        makeDigitSVG(d, 10, { stretch: false, chop: true }) +
+        `<div class="preview-label">${d}</div>`;
+
+      stretchEl.innerHTML =
+        makeDigitSVG(d, 10, { stretch: true, chop: false }) +
+        `<div class="preview-label">${d}</div>`;
+    }
+
+    setInterval(() => {
+      previewIndex = (previewIndex + 1) % 10;
+      updatePreviews();
+    }, 900);
+
+    // --- EXPORT HELPERS ---
+
+    function extractInnerSvgContent(svgString) {
+      const start = svgString.indexOf(">");
+      const end = svgString.lastIndexOf("</svg>");
+      if (start === -1 || end === -1) return "";
+      return svgString.slice(start + 1, end);
+    }
+
+    function buildExportSVGString(digits, base, opts) {
+      if (!digits || digits.length === 0) {
+        return "";
+      }
+      const chopActive = opts.chop && base === 10;
+      const glyphWidth = 100;
+      const glyphHeight = chopActive ? 100 : 150;
+
+      let svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${glyphWidth * digits.length}" height="${glyphHeight}" viewBox="0 0 ${glyphWidth * digits.length} ${glyphHeight}">`;
+
+      digits.forEach((d, i) => {
+        const fragment = makeDigitSVG(d, base, opts); // no mainOutput here
+        const inner = extractInnerSvgContent(fragment);
+        svg += `<g transform="translate(${i * glyphWidth},0)">` + inner + `</g>`;
+      });
+
+      svg += `</svg>`;
+      return svg;
+    }
+
+    function downloadSVG() {
+      const svgString = buildExportSVGString(lastDigits, lastBase, {
+        stretch: lastStretch,
+        chop: lastChop
+      });
+      if (!svgString) return;
+
+      const blob = new Blob([svgString], { type: "image/svg+xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `numerals_${Date.now()}.svg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadPNG() {
+      const svgString = buildExportSVGString(lastDigits, lastBase, {
+        stretch: lastStretch,
+        chop: lastChop
+      });
+      if (!svgString) return;
+
+      const blob = new Blob([svgString], { type: "image/svg+xml" });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const scale = 2;
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((pngBlob) => {
+          const pngUrl = URL.createObjectURL(pngBlob);
+          const a = document.createElement("a");
+          a.href = pngUrl;
+          a.download = `numerals_${Date.now()}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(pngUrl);
+          URL.revokeObjectURL(url);
+        }, "image/png");
+      };
+      img.src = url;
+    }
+
+    // --- EVENTS ---
+
+    document.getElementById("renderBtn").addEventListener("click", render);
+    document.getElementById("baseSelect").addEventListener("change", render);
+    document.getElementById("stretchCheckbox").addEventListener("change", render);
+    document.getElementById("chopCheckbox").addEventListener("change", render);
+    document.getElementById("numberInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") render();
+    });
+
+    document.getElementById("exportSvgBtn").addEventListener("click", downloadSVG);
+    document.getElementById("exportPngBtn").addEventListener("click", downloadPNG);
+
+    // Initial render + previews
+    render();
+    updatePreviews();
+  </script>
+</body>
+</html>
