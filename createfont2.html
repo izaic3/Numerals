@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Stroke Numerals Font Generator</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .card {
+      max-width: 700px;
+      width: 100%;
+      background: #020617;
+      border-radius: 12px;
+      border: 1px solid #1f2937;
+      padding: 20px 24px 24px;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.7);
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 1.6rem;
+    }
+    button {
+      border-radius: 999px;
+      border: none;
+      padding: 10px 22px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      background: linear-gradient(135deg, #22c55e, #38bdf8);
+      color: #020617;
+      font-weight: 600;
+      box-shadow: 0 10px 25px rgba(34,197,94,0.4);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    button:hover {
+      filter: brightness(1.05);
+      transform: translateY(-1px);
+    }
+    button:active {
+      transform: translateY(0);
+      box-shadow: 0 6px 15px rgba(34,197,94,0.4);
+    }
+    .hint {
+      font-size: 0.9rem;
+      color: #9ca3af;
+      margin-top: 12px;
+      line-height: 1.4;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 0.85rem;
+      color: #fbbf24;
+    }
+    .status.ok {
+      color: #4ade80;
+    }
+    code {
+      background: #020617;
+      padding: 2px 4px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+    }
+  </style>
+
+  <!-- opentype.js from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/opentype.js@latest/dist/opentype.min.js"></script>
+</head>
+<body>
+  <div class="card">
+    <h1>Stroke Numerals Font Generator</h1>
+    <p class="hint">
+      This page will generate a <code>StrokeNumerals.ttf</code> file based on your stroke-numeral design.
+      The mapping is:
+    </p>
+    <ul class="hint">
+      <li><code>0–9</code> → chopped (square) numerals</li>
+      <li><code>) ! @ # $ % ^ &amp; * (</code> → stretched numerals (Shift+0–9 on a US keyboard)</li>
+    </ul>
+    <button id="generateBtn" type="button">
+      Generate &amp; Download Font
+      <span aria-hidden="true">⬇</span>
+    </button>
+    <div id="status" class="status"></div>
+    <p class="hint">
+      After installing the font, type <code>0123456789</code> for chopped digits and
+      <code>)!@#$%^&amp;*()</code> for stretched digits in any app that lets you choose fonts.
+    </p>
+  </div>
+
+  <script>
+    // --- Geometry & stroke logic (mirrors your numeral system) ---
+
+    const EM = 1000;
+    const STROKE = 80;
+
+    // Chopped: square from 100–900 both directions
+    const CHOP_UL = { x: 100, y: 900 };
+    const CHOP_UR = { x: 900, y: 900 };
+    const CHOP_LL = { x: 100, y: 100 };
+    const CHOP_LR = { x: 900, y: 100 };
+
+    const CHOP_TOP_POINTS = {
+      UL: CHOP_UL,
+      UR: CHOP_UR,
+      ML: CHOP_LL, // mid row mapped to bottom
+      MR: CHOP_LR
+    };
+
+    const CHOP_BOTTOM_POINTS = {
+      ML: CHOP_UL, // mid row mapped to top
+      MR: CHOP_UR,
+      LL: CHOP_LL,
+      LR: CHOP_LR
+    };
+
+    const CHOP_ZERO_POINTS = {
+      UL: CHOP_UL,
+      UR: CHOP_UR,
+      LL: CHOP_LL,
+      LR: CHOP_LR
+    };
+
+    // Full-height: 3-row layout
+    const FULL_UL = { x: 100, y: 900 };
+    const FULL_UR = { x: 900, y: 900 };
+    const FULL_ML = { x: 100, y: 550 };
+    const FULL_MR = { x: 900, y: 550 };
+    const FULL_LL = { x: 100, y: 200 };
+    const FULL_LR = { x: 900, y: 200 };
+
+    const FULL_POINTS = {
+      UL: FULL_UL,
+      UR: FULL_UR,
+      ML: FULL_ML,
+      MR: FULL_MR,
+      LL: FULL_LL,
+      LR: FULL_LR
+    };
+
+    // Stroke sequence (cumulative) for digits 1–11
+    const STEP_SEGMENTS = [
+      ["UR", "ML"], // 1
+      ["ML", "UL"], // 2
+      ["UL", "UR"], // 3
+      ["UR", "MR"], // 4
+      ["MR", "ML"], // 5
+      ["ML", "LL"], // 6
+      ["LL", "LR"], // 7
+      ["LR", "MR"], // 8
+      ["MR", "LL"], // 9
+      ["UL", "MR"], // 10
+      ["ML", "LR"]  // 11
+    ];
+
+    const ZERO_SEGMENTS = [
+      ["UL","UR"],
+      ["UR","MR"],
+      ["MR","LR"],
+      ["LR","LL"],
+      ["LL","ML"],
+      ["ML","UL"]
+    ];
+
+    function choppedSegmentsForDigit(d) {
+      if (d === 0) {
+        // square 0 in chopped mode
+        return [
+          ["UL", "UR"],
+          ["UR", "LR"],
+          ["LR", "LL"],
+          ["LL", "UL"]
+        ];
+      }
+      const segs = [];
+      if (d >= 1 && d <= 5) {
+        for (let i = 0; i < d; i++) {
+          segs.push(STEP_SEGMENTS[i]);
+        }
+      } else if (d >= 6 && d <= 9) {
+        for (let i = 5; i < d; i++) {
+          segs.push(STEP_SEGMENTS[i]);
+        }
+      }
+      return segs;
+    }
+
+    function fullSegmentsForDigit(d) {
+      if (d === 0) {
+        return ZERO_SEGMENTS.slice();
+      }
+      return STEP_SEGMENTS.slice(0, d);
+    }
+
+    function stretchedPointsForDigit(d) {
+      // For 1–5, move midpoint row down to bottom
+      if (d >= 1 && d <= 5) {
+        const shift = FULL_LL.y - FULL_ML.y;
+        return {
+          UL: FULL_UL,
+          UR: FULL_UR,
+          ML: { x: FULL_ML.x, y: FULL_ML.y + shift },
+          MR: { x: FULL_MR.x, y: FULL_MR.y + shift },
+          LL: { x: FULL_LL.x, y: FULL_LL.y + shift },
+          LR: { x: FULL_LR.x, y: FULL_LR.y + shift }
+        };
+      }
+      return FULL_POINTS;
+    }
+
+    function quadForSegment(p1, p2, width) {
+      const x1 = p1.x, y1 = p1.y;
+      const x2 = p2.x, y2 = p2.y;
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const length = Math.hypot(dx, dy);
+      if (length === 0) return null;
+      const ux = dx / length;
+      const uy = dy / length;
+      const px = -uy;
+      const py = ux;
+      const hw = width / 2;
+      const offx = px * hw;
+      const offy = py * hw;
+      return [
+        { x: x1 + offx, y: y1 + offy },
+        { x: x1 - offx, y: y1 - offy },
+        { x: x2 - offx, y: y2 - offy },
+        { x: x2 + offx, y: y2 + offy }
+      ];
+    }
+
+    function buildGlyphPath(segments, points) {
+  const path = new opentype.Path();
+
+  for (const [a, b] of segments) {
+    const p1 = points[a];
+    const p2 = points[b];
+    if (!p1 || !p2) continue;
+
+    const quad = quadForSegment(p1, p2, STROKE);
+    if (!quad) continue;
+
+    // Ensure a consistent winding direction (counter-clockwise)
+    let verts = quad.slice(); // [ {x,y}, ... ]
+
+    let area = 0;
+    for (let i = 0; i < verts.length; i++) {
+      const p = verts[i];
+      const q = verts[(i + 1) % verts.length];
+      area += p.x * q.y - q.x * p.y;
+    }
+
+    // If area is negative, the polygon is clockwise – reverse it
+    if (area < 0) {
+      verts.reverse();
+    }
+
+    // Draw the normalized quad
+    path.moveTo(verts[0].x, verts[0].y);
+    for (let i = 1; i < verts.length; i++) {
+      path.lineTo(verts[i].x, verts[i].y);
+    }
+    path.close();
+  }
+
+  return path;
+}
+
+
+    function generateFont() {
+      const statusEl = document.getElementById("status");
+      statusEl.textContent = "Building font...";
+      statusEl.className = "status";
+
+      const glyphs = [];
+
+      // .notdef
+      glyphs.push(new opentype.Glyph({
+        name: ".notdef",
+        unicode: 0,
+        advanceWidth: EM,
+        path: new opentype.Path()
+      }));
+
+      // Chopped digits 0–9 mapped to '0'..'9'
+      for (let d = 0; d < 10; d++) {
+        const unicode = "0".charCodeAt(0) + d;
+        let pts, segs;
+        if (d === 0) {
+          pts = CHOP_ZERO_POINTS;
+          segs = choppedSegmentsForDigit(0);
+        } else {
+          pts = (d <= 5) ? CHOP_TOP_POINTS : CHOP_BOTTOM_POINTS;
+          segs = choppedSegmentsForDigit(d);
+        }
+        const path = buildGlyphPath(segs, pts);
+        glyphs.push(new opentype.Glyph({
+          name: "chop" + d,
+          unicode,
+          advanceWidth: EM,
+          path
+        }));
+      }
+
+      // Stretched digits 0–9 mapped to ) ! @ # $ % ^ & * (
+      const shiftChars = ")!@#$%^&*(";
+      for (let d = 0; d < 10; d++) {
+        const ch = shiftChars[d];
+        const unicode = ch.charCodeAt(0);
+        const pts = stretchedPointsForDigit(d);
+        const segs = fullSegmentsForDigit(d);
+        const path = buildGlyphPath(segs, pts);
+        glyphs.push(new opentype.Glyph({
+          name: "stretch" + d,
+          unicode,
+          advanceWidth: EM,
+          path
+        }));
+      }
+
+      const font = new opentype.Font({
+        familyName: "Stroke Numerals",
+        styleName: "Regular",
+        unitsPerEm: EM,
+        ascender: 900,
+        descender: -100,
+        glyphs
+      });
+
+      const blob = new Blob([font.toArrayBuffer()], { type: "font/ttf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "StrokeNumerals.ttf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      statusEl.textContent = "Done! Downloaded StrokeNumerals.ttf";
+      statusEl.className = "status ok";
+    }
+
+    document.getElementById("generateBtn").addEventListener("click", generateFont);
+  </script>
+</body>
+</html>
